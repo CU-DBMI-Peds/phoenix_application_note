@@ -1,3 +1,20 @@
-# phoenix_application_note
+# phoenix: An R package and Python module for calculating the Phoenix Pediatric Sepsis Score and Criteria
 
-This is a placeholder for the the source code needed for the application note being submitted to a peer reviewed journal.  After publication the source code will be made public.
+The source code needed to build the manuscript __details after publication__
+
+
+## How to build the documents
+
+* System dependencies:
+  * [quarto](https://quarto.org/)
+  * [R](https://cran.r-project.org/)
+  * [GNU make](https://www.gnu.org/software/make/)
+  * [latexmk](https://ctan.org/pkg/latexmk)
+  * [latexdiff](https://ctan.org/pkg/latexdiff?lang=en)
+
+The application note and supplemental file can be built by calling
+
+    make
+
+This will check for needed R packages (see `setup.R`) and build the appliation
+note and supplemental file.
