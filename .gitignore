@@ -1,0 +1,5 @@
+.check_R
+references/*.pdf
+application_note_files/*
+supplement_files/*
+.DS_Store

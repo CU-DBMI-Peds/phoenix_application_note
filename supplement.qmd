@@ -1,0 +1,1444 @@
+---
+title: "Supplement Material"
+subtitle: "phoenix: R package and Python module for calculating the Phoenix Pediatric Sepsis Score and Criteria"
+
+code-fold: show
+number-sections: true
+
+format:
+  pdf:
+    fig-cap-location: top
+    toc: true
+    keep-tex: true
+
+bibliography: references.bib
+csl: jamia.csl
+---
+
+
+```{r}
+#| label: setup
+#| include: false
+
+knitr::opts_chunk$set(collapse = TRUE)
+library(reticulate)
+
+#virtualenv_remove(envname = "phoenix", confirm = FALSE)
+
+if (!virtualenv_exists(envname = "phoenix")) {
+  virtualenv_create(envname = "phoenix")
+  virtualenv_install(envname = "phoenix", packages = c("numpy", "pandas"))
+  virtualenv_install(envname = "phoenix",
+                     packages = "git+https://github.com/CU-DBMI-Peds/phoenix.git#egg=phoenix-sepsis&subdirectory=python")
+}
+use_virtualenv(virtualenv = "phoenix")
+library(phoenix)
+library(ggplot2)
+```
+
+```{r}
+#| label: rubric
+#| include: false
+rubric <-
+  scan(file = system.file("phoenix_rubric_sans_footnotes.md", package = "phoenix"),
+       what = character(),
+       sep = "\n",
+       quiet = TRUE)
+
+rubric <- gsub(":------", ":----", rubric)
+rubric <- gsub("&nbsp;&nbsp;", "&nbsp;", rubric)
+rubric <- gsub("&leq;", "$\\\\leq$", rubric)
+rubric <- gsub("&lt;", "$<$", rubric)
+rubric <- gsub("&geq;", "$\\\\geq$", rubric)
+rubric <- gsub("&gt;", "$>$", rubric)
+rubric <- gsub("&mu;", "$\\mu$", rubric)
+rubric <- gsub("Organ System", "", rubric)
+
+respiratory_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 1)[-1])]
+
+cardiovascular_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 2)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:5]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+coagulation_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 3)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:4]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+neurologic_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 4)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:5]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+endocrine_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 5)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:4]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+immunologic_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 6)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:4]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+renal_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 7)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:4]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+hepatic_rubric <-
+  rubric[ c(1:2, which(cumsum(grepl("^\\|\\s\\*\\*", rubric)) == 8)[-1])] |>
+  strsplit(x = _, split = "\\|") |>
+  lapply(function(x) x[1:4]) |>
+  lapply(paste, collapse = "|") |>
+  lapply(paste, "|") |>
+  do.call(c, args = _)
+
+```
+
+{{< pagebreak >}}
+
+Methods for applying the Phoenix organ dysfunction scoring and criteria in R and
+Python have been packaged and published.  Example SQL queries (SQLite) are also
+presented here.
+
+# Installing Software
+
+## R
+To install the R package
+
+1. Install R
+2. Within R call `install.packages('phoenix')` to get the current released
+   version.
+
+Install the development version of `phoenix` directly from GitHub via the
+[`remotes`](https://github.com/r-lib/remotes/) package[@r_remotes]:
+
+```{r}
+#| label: R_install_from_github
+#| eval: false
+if (!("remotes" %in% rownames(installed.packages()))) {
+  warning("installing remotes from https://cran.rstudio.com")
+  install.packages("remotes", repo = "https://cran.rstudio.com")
+}
+
+remotes::install_github("cu-dbmi-peds/phoenix")
+```
+*NOTE:* If you are working on a Windows machine, you will need to download and
+install [`Rtools`](https://cran.r-project.org/bin/windows/Rtools/).
+
+## Python
+
+To install the Python module use `pip`.
+
+```{python}
+#| label: py_install
+#| eval: false
+pip install phoenix-sepsis
+```
+
+
+# Example Data
+
+A small example data set has been provided in the phoenix R package and the
+phoenix-sepsis.  In R the data set, `sepsis`, is a provided as a data.frame.  In
+Python, it is provided as a .csv file with instructions for loading it into a
+pandas DataFrame.  For the SQL examples we'll use a in-memory SQLite database
+and load the data into a table called `sepsis.`
+
+The data set consists of `r nrow(sepsis)` observations of `r ncol(sepsis)`
+variables.  The column names and ordering are consistent between the R package
+and Python module.
+
+ | Column Name      | Description                                                 |
+ | :---             | :-------                                                    |
+ | `pid`            | patient identification number                               |
+ | `age`            | age in months                                               |
+ | `fio2`           | fraction of inspired oxygen                                 |
+ | `pao2`           | partial pressure of oxygen in arterial blood (mmHg)         |
+ | `spo2`           | pulse oximetry                                              |
+ | `vent`           | indicator for invasive mechanical ventilation               |
+ | `gcs_total`      | total Glasgow Coma Scale                                    |
+ | `pupil`          | character vector reporting if pupils are reactive or fixed. |
+ | `platelets`      | platelets measured in 1,000 / $\mu$L                        |
+ | `inr`            | international normalized ratio                              |
+ | `d_dimer`        | D-dimer; units of mg/L FEU                                  |
+ | `fibrinogen`     | units of mg/dL                                              |
+ | `dbp`            | diagnostic blood pressure (mmHg)                            |
+ | `sbp`            | systolic blood pressure (mmHg)                              |
+ | `lactate`        | units of mmol/L                                             |
+ | `dobutamine`     | indicator for receiving systemic dobutamine                 |
+ | `dopamine`       | indicator for receiving systemic dopamine                   |
+ | `epinephrine`    | indicator for receiving systemic epinephrine                |
+ | `milrinone`      | indicator for receiving systemic milrinone                  |
+ | `norepinephrine` | indicator for receiving systemic norepinephrine             |
+ | `vasopressin`    | indicator for receiving systemic vasopressin                |
+ | `glucose`        | units of mg/dL                                              |
+ | `anc`            | units of 1,000 cells per cubic millimeter                   |
+ | `alc`            | units of 1,000 cells per cubic millimeter                   |
+ | `creatinine`     | units of mg/dL                                              |
+ | `bilirubin`      | units of mg/dL                                              |
+ | `alt`            | units of IU/L                                               |
+
+
+## R
+The `sepsis` data set is lazyloaded when the package namespace is loaded and
+attached.  No other packages are needed to run the R examples in this
+supplement.
+```{r}
+#| label: r_load_data
+library(phoenix)
+str(sepsis)
+```
+
+## Python
+
+Along with with `phoenix` module, you will need `numpy`, `pandas`, and
+`importlib.resources` to run all the Python examples in this supplement.
+
+```{python}
+#| label: py_load_data
+import numpy as np
+import pandas as pd
+import importlib.resources
+import phoenix as phx
+
+path = importlib.resources.files('phoenix')
+sepsis = pd.read_csv(path.joinpath('data').joinpath('sepsis.csv'))
+
+print(sepsis.info())
+print(sepsis.head())
+```
+
+## SQL
+The example SQL queries are done in a in-memory SQLite instance set up within R.
+The following code chunk sets up the database with the example sepsis data
+loaded into a table of the same name.
+```{r}
+#| label: set_up_sql_db
+library(odbc)
+library(DBI)
+library(RSQLite)
+library(phoenix)
+con <- dbConnect(drv = RSQLite::SQLite(), dbname = ":memory:")
+dbWriteTable(conn = con, name = "sepsis", value = sepsis)
+```
+
+The structure of the table:
+```{sql, class.source = "sqlchunk", connection = con}
+#| label: sql_show_data_structure
+PRAGMA table_info(sepsis);
+```
+
+# Organ Dysfunction Scores
+
+In each of the following eight sections we present details on the Phoenix
+scoring and provide examples of applying the Phoenix scoring in R, Python, and
+SQL.
+
+**Important Notes:**
+
+* Phoenix was developed on a data set of pediatric (age 0 to 18 years) non-birth
+  hospitalizations.
+
+* Phoenix was developed assuming that missing data maps to a score of zero.  In
+  the source code for the R package and Python modules you can see that missing
+  values are mapped to "healthy" values such that a score of 0 will be returned.
+  The example SQL queries do this explicitly.
+
+  This means any omitted arguments will map to scores of zero where the omitted
+  variable is needed.  Thus, the organ dysfunction scores, and the composite
+  scores are based on the explicitly used inputs.
+
+* The provided example data set provides all the needed inputs for the Phoenix
+  criteria, but requires some processing before scoring.  For example, the
+  SpO~2~:FiO~2~ ratio that is needed for the respiratory score is not provided
+  in the `sepsis` data set.  The componets, `spo2` and `fio2`, are part of the
+  data set.  The reason for this is to highlight an important restriction on the
+  use of the SpO~2~:FiO~2~ ratio: it is only valid for SpO~2~ values least than
+  or equal to 97.
+
+  Processing the data and creating specific columns for the needed inputs, as
+  seen below, would be preferable in practice, for example,
+```{r}
+sepsis2 <-
+  with(sepsis,
+    data.frame(
+        pfr = pao2 / fio2,
+        sfr = ifelse(spo2 <= 97, spo2 / fio2, NA_real_),
+        imv = vent,
+        ors = as.integer(fio2 > 0.21),
+        vasos = dobutamine + dopamine + epinephrine + milrinone + norepinephrine + vasopressin,
+        lactate = lactate,
+        age = age,
+        map = map(sbp = sbp, dbp = dbp),
+        plts = platelets,
+        inr = inr,
+        ddimer = d_dimer,
+        fib = fibrinogen,
+        gcs = gcs_total,
+        pupils = as.integer(pupil == "both-fixed"),
+        glucose = glucose,
+        anc = anc,
+        alc = alc,
+        creatinine = creatinine,
+        bilirubin = bilirubin,
+        alt = alt)
+  )
+```
+
+The examples that follow will use the `sepsis` data set to highlight the data
+assumptions.
+
+## Respiratory
+
+The Phoenix scoring for respiratory dysfunction is based on the pSOFA
+[@matric_2017_psofa] criteria.
+
+### Inputs:
+* `pf_ratio`: is the ratio of PaO~2~ (partial pressure or oxygen in
+  arterial blood, units of mmHg) to FiO~2~ (fraction of inspiratory
+  oxygen, values expected to be between 0.21 for room air, to 1.00).  Gathering
+  the PaO~2~ is an invasive procedure.
+
+* `sf_ratio`: The SpO~2~ (pulse oximetry) to FiO~2~ ratio is a
+  non-invasive surrogate for the PF ratio.  Important note: during the
+  development of the Phoenix criteria SF ratios were only valid to consider if
+  the SpO~2~ is $\leq 97$.  Expected value range for SpO~2~ is 0 to 100.
+
+* `imv`: Invasive mechanical ventilation.  This is an integer valued indicator
+  variable: 0 = not intubated; 1 = intubated.
+
+* `other_respiratory_support`: Any oxygen support, e.g., high-flow, non-invasive
+  positive pressure, or IMV.  This can be inferred if FiO~2~ exceeds 0.21.
+
+### Phoenix Scoring
+
+The respiratory score is based on the PaO~2~:FiO~2~ ratio or the SpO~2~:FiO~2~
+ratio.  PaO~2~:FiO~2~ is used preferentially over the SpO~2~:FiO~2~ with the
+worst possible score used.  That is, if a patient would have 1 point based on
+PaO~2~:FiO~2~ but 2 points based on SpO~2~:FiO~2~, then the score is 2 points.
+
+```{r}
+#| label: respiratory_rubric
+#| echo: false
+#| results: asis
+cat(respiratory_rubric, sep = "\n")
+```
+
+```{r}
+#| label: respiratory_score_graphic
+#| echo: false
+#| fig-width: 7
+#| fig-height: 4
+resp_data <-
+  expand.grid(pfr = seq(0, 450, by = 10), sfr = seq(0, 450, by = 10), imv = c(0, 1), o2 = c(0, 1))
+resp_data$o2 <- pmax(resp_data$imv, resp_data$o2)
+resp_data <- unique(resp_data)
+resp_data$phoenix_respiratory_score <- factor(phoenix_respiratory(pfr, sfr, imv, o2, data = resp_data))
+
+resp_data$oxygen_support <-
+  factor(
+    interaction(resp_data$imv, resp_data$o2),
+    levels = c("0.0", "0.1", "1.1"),
+    labels = c("No Oxygen Support", "Non-invasive Oxygen Support", "Invasive Oxygen Support")
+  )
+
+ggplot2::ggplot(data = resp_data) +
+  ggplot2::theme_classic() +
+  ggplot2::aes(x = sfr, y = pfr, fill = phoenix_respiratory_score) +
+  ggplot2::geom_tile() +
+  ggplot2::facet_wrap( ~ oxygen_support, nrow = 1) +
+  ggplot2::scale_fill_brewer(name = "Phoenix Respiratory Score", palette = "Spectral", direction = -1) +
+  ggplot2::ylab(expression(PaO[2] : FiO[2])) +
+  ggplot2::xlab(expression(SpO[2] : FiO[2])) +
+  ggplot2::theme(legend.position = "bottom")
+```
+
+### R
+The `phoenix_respiratory` call in R returns an integer vector of scores.  The
+inputs are expected to be vectors of equal length and can be explicitly defined
+from a data set or short handed by passing the data set in via the `data`
+argument as shown below.
+
+```{r}
+#| label: r_phoenix_respiratory
+phoenix_respiratory(
+  pf_ratio = pao2 / fio2,
+  sf_ratio = ifelse(spo2 <= 97, spo2 / fio2, NA_real_),
+  imv = vent,
+  other_respiratory_support = as.integer(fio2 > 0.21),
+  data = sepsis
+)
+```
+
+The above explicitly shows the data assumptions for the SpO~2~:FiO~2~ ratio
+(`sf_ratio`) and `other_respiratory_support`.  If the data has be processed with
+these assumptions already, or if you only have the SpO~2~:FiO~2~ ratio, the
+inputs can be simplified as
+
+```{r}
+#| label: r_phoenix_respiratory2
+phoenix_respiratory(
+  pf_ratio = pfr,
+  sf_ratio = sfr,
+  imv = imv,
+  other_respiratory_support = ors,
+  data = sepsis2
+)
+```
+
+### Python
+The Python implementation is similar to the implementation in R.  The notable
+difference in the lack of the `data` argument.
+
+```{python}
+#| label: py_phoenix_respiratory
+py_resp = phx.phoenix_respiratory(
+    pf_ratio = sepsis["pao2"] / sepsis["fio2"],
+    sf_ratio = np.where(sepsis["spo2"] <= 97, sepsis["spo2"] / sepsis["fio2"], np.nan),
+    imv      = sepsis["vent"],
+    other_respiratory_support = (sepsis["fio2"] > 0.21).astype(int).to_numpy()
+)
+print(type(py_resp))
+print(py_resp)
+```
+
+### SQLite
+
+For the SQLite example we start by constructing the needed variables form the
+`sepsis` table and then building the score.  The results will be stored in new
+table so we can use them again when assessing the Phoenix and Phoenix-8 scores.
+
+```{sql connection = con}
+CREATE TABLE IF NOT EXISTS respiratory AS
+  SELECT
+    pid,
+    (
+      imv * (
+        IIF(pfr < 100 OR sfr < 148, 1, 0) + IIF(pfr < 200 OR sfr < 220, 1, 0)
+      ) +
+      other_respiratory_support * IIF(pfr < 400 OR sfr < 292, 1, 0)
+    ) AS phoenix_respiratory_score
+  FROM
+  (
+    SELECT
+      pid,
+      COALESCE(pao2 / fio2, 500) AS pfr,
+      COALESCE(IIF(spo2 <= 97, spo2 / fio2, 500), 500) AS sfr,
+      COALESCE(vent, 0) AS imv,
+      IIF(fio2 > 0.21 OR vent = 1, 1, 0) AS other_respiratory_support
+    FROM sepsis
+  );
+```
+```{sql connection = con}
+SELECT * from respiratory
+```
+
+## Cardiovascular
+
+There are three components of the Phoenix scoring for cardiovascular
+dysfunction.  The number of systemic vasoactive medications is a modification of
+the vasoactive-inotropic score[@gaies_2010_vis] (VIS) and the cardiovascular
+score from the Pediatric Logistic Organ Dysfunction-2 (PELOD-2)[@dewi_2019_pelod2].
+
+### Inputs
+* `vasoactives`: is an integer count of the number of systemic vasoactive
+  medications the patient is currently receiving.  During development of the
+  Phoenix criteria it was found that just the count of the medications was
+  sufficient to be useful, the dosage was not needed.  There were six
+  medications considered: dobutamine, dopamine, epinephrine, milrinone,
+  norepinephrine, and vasopressin.  Again, it is systemic use of the medication
+  that is important. For example, an injection of epinephrine to halt an
+  allergic reaction would not count, whereas having an epinephrine drip to treat
+  hypotension or bradycardia would count.
+
+* `lactate`: level of lactate in the blood, measured in mmol/L
+
+* `age`: in months
+
+* `map`: mean arterial pressure (mmHg).  During development of the Phoenix
+  criteria, map, and blood pressure values in general, obtained from arterial
+  measures were used preferentially over values obtained from cuffs.  Reported
+  values were used preferentially over calculated values.  If you need to
+  calculate the map use DBP + (1/3) * (SBP - DBP) where DBP is diastolic blood
+  pressure (mmHg) and SBP is systolic blood pressure (mmHg).
+
+### Phoenix Scoring
+
+The Phoenix score is the sum of the vasoactive medications score, lactate score,
+and mean MAP score for a total score ranging between 0 and 6 points.
+
+```{r}
+#| label: cardiovascular_rubric
+#| echo: false
+#| results: asis
+cat(cardiovascular_rubric, sep = "\n")
+```
+
+```{r}
+#| label: cardiovascular_score_graphic
+#| echo: false
+#| fig-width: 7
+#| fig-height: 7
+DF <- expand.grid(vasoactives = 0:2,
+                  lactate = seq(0, 15, by = 1),
+                  age = seq(0, 18 * 12, by = 1),
+                  MAP = seq(00, 60, by = ))
+DF$phoenix_cardiovascular_score <-
+  factor(
+    phoenix_cardiovascular(vasoactives, lactate, age, MAP, data = DF)
+  )
+
+DF$vasoactives <- factor(DF$vasoactives, 0:2, paste("Vasoactive~Medications:", c("0", "1", "2~or~more")))
+
+DF$lactate_bin <- cut(DF$lactate, breaks = c(0, 5, 11, Inf), right = F)
+levels(DF$lactate_bin) <-
+  c("Lactate~(mmol/L) < 5", "5 <= Lactate~(mmol/L) < 11", "Lactate~(mmol/L) >= 11")
+
+ggplot2::ggplot(DF) +
+  ggplot2::theme_classic() +
+  ggplot2::aes(x = age, y = MAP, fill = phoenix_cardiovascular_score) +
+  ggplot2::geom_tile() +
+  ggplot2::facet_grid(lactate_bin ~ vasoactives, labeller = "label_parsed") +
+  ggplot2::scale_fill_brewer(name = "Phoenix Cardiovascular Score", palette = "Spectral", direction = -1) +
+  ggplot2::scale_x_continuous(breaks = seq(0, 18*12, by = 12 * 3)) +
+  ggplot2::ylab("Mean Arterial Pressure (mmHg)") +
+  ggplot2::xlab("Age (months)") +
+  ggplot2::guides(fill = ggplot2::guide_legend(nrow = 1)) +
+  ggplot2::theme(legend.position = "bottom")
+```
+
+### R
+For this example data set we can specify a sum for the `vasoactives` since each
+of the columns are indicators.  The mean arterial pressure is estimated based on
+the reported systolic and diastolic pressures.  The R package `phoenix` provides
+the function `map` to simplify the estimate:  $MAP = \frac{2}{3}DBP + \frac{1}{3}SBP$.
+```{r}
+#| label: r_phoenix_cardiovascular
+phoenix_cardiovascular(
+  vasoactives = dobutamine + dopamine + epinephrine +
+                milrinone + norepinephrine + vasopressin,
+  lactate = lactate,
+  age = age,
+  map = map(sbp, dbp),
+  data = sepsis
+)
+```
+
+### Python
+As with the R package, the Python module provides the function `map` to simplify
+the estimation of the mean arterial pressure.
+```{python}
+#| label: py_phoenix_cardiovascular
+py_card = phx.phoenix_cardiovascular(
+    vasoactives = sepsis["dobutamine"] + sepsis["dopamine"] + sepsis["epinephrine"] +
+                  sepsis["milrinone"] + sepsis["norepinephrine"] + sepsis["vasopressin"],
+    lactate = sepsis["lactate"],
+    age = sepsis["age"],
+    map = phx.map(sepsis["sbp"], sepsis["dbp"])
+)
+print(type(py_card))
+print(py_card)
+```
+### SQLite
+
+For the SQLite example we will create a new table to store the results which
+will be used when getting the overall Phoenix and Phoenix-8 scores.
+
+```{sql connection = con}
+#| label: sql_phoenix_cardiovascular
+CREATE TABLE IF NOT EXISTS cardiovascular AS
+
+SELECT
+  pid,
+  vaso_points + lactate_points + map_points AS phoenix_cardiovascular_score
+FROM
+(
+  SELECT *,
+    CASE WHEN vasos > 1 THEN 2
+         WHEN vasos > 0 THEN 1
+         ELSE 0 END AS vaso_points,
+    CASE WHEN lactate >= 11 THEN 2
+         WHEN lactate >=  5 THEN 1
+         ELSE 0 END AS lactate_points,
+    CASE WHEN (age >=   0 AND age <    1) AND (map < 17) THEN 2
+         WHEN (age >=   1 AND age <   12) AND (map < 25) THEN 2
+         WHEN (age >=  12 AND age <   24) AND (map < 31) THEN 2
+         WHEN (age >=  24 AND age <   60) AND (map < 32) THEN 2
+         WHEN (age >=  60 AND age <  144) AND (map < 36) THEN 2
+         WHEN (age >= 144 AND age <= 216) AND (map < 38) THEN 2
+         WHEN (age >=   0 AND age <    1) AND (map < 31) THEN 1
+         WHEN (age >=   1 AND age <   12) AND (map < 39) THEN 1
+         WHEN (age >=  12 AND age <   24) AND (map < 44) THEN 1
+         WHEN (age >=  24 AND age <   60) AND (map < 45) THEN 1
+         WHEN (age >=  60 AND age <  144) AND (map < 49) THEN 1
+         WHEN (age >= 144 AND age <= 216) AND (map < 52) THEN 1
+         ELSE 0 END AS map_points
+  FROM
+  (
+    SELECT
+      pid,
+      COALESCE(dobutamine, 0) +
+        COALESCE(dopamine, 0) +
+        COALESCE(epinephrine, 0) +
+        COALESCE(milrinone, 0) +
+        COALESCE(norepinephrine, 0) +
+        COALESCE(vasopressin, 0) AS vasos,
+      lactate,
+      dbp + (sbp - dbp) / 3 AS map,
+      age
+    FROM sepsis
+  )
+);
+```
+
+```{sql connection = con}
+SELECT * FROM cardiovascular;
+```
+
+## Coagulation
+
+The Disseminated intravascular coagulation score (DIC)[@khemani_2009_dic] is the
+basis for the Phoenix coagulation dysfunction score.
+
+### Inputs:
+
+* `platelets`: in units of 1,000 / $\mu$L
+
+* `inr`: international normalized ratio; a metric for time require for blood to clot.
+
+* `d_dimer`: in units of mg/L FEU
+
+* `fibrinogen` : in units of mg/dL
+
+### Phoenix Scoring
+
+While there are four components to this score, the maximum number of points
+assigned is 2.
+
+```{r}
+#| label: coagulation_rubric
+#| echo: false
+#| results: asis
+cat(coagulation_rubric, sep = "\n")
+```
+
+```{r}
+#| label: coagulation_score_graphic
+#| echo: false
+#| fig.width: 7
+#| fig.height: 4
+DF <- expand.grid(platelets = c(10, 150),
+                  inr = c(1.0, 1.5),
+                  d_dimer = c(1.2, 4.0),
+                  fib = c(10, 150))
+DF$plt_bin <-
+  factor(DF$platelets, levels = c(10, 150), labels = c("Platelets < 100", "Platelets >= 100"))
+
+DF$inr_bin <-
+  factor(DF$inr, levels = c(1.0, 1.5), labels = c("INR <= 1.3", "INR > 1.3"))
+
+DF$ddm_bin <-
+  factor(DF$d_dimer, levels = c(1.2, 4.0), labels = c("D-dimer <= 2", "D-dimer > 2"))
+
+DF$fib_bin <- factor(DF$fib, levels = c(10, 150),
+                     labels = c("Fibrinogen < 100", "Fibrinogen >= 100"))
+
+DF$phoenix_coagulation_score <-
+  factor(
+    phoenix_coagulation(platelets, inr, d_dimer, fib, data = DF)
+  )
+
+ggplot(DF) +
+  theme_classic() +
+  aes(x = plt_bin, y = fib_bin, fill = phoenix_coagulation_score) +
+  geom_tile() +
+  facet_grid(inr_bin ~ ddm_bin, labeller = "label_parsed") +
+  scale_fill_brewer(name = "Phoenix Coagulation Score", palette = "Spectral", direction = -1) +
+  scale_x_discrete(labels = parse(text = levels(DF$plt_bin))) +
+  scale_y_discrete(labels = parse(text = levels(DF$fib_bin))) +
+  ylab("")+
+  xlab("")+
+  theme(legend.position = "bottom")
+```
+
+### R
+The needed inputs for the coagulation score are as is within the example data
+set.
+```{r}
+#| label: r_coagulation
+phoenix_coagulation(
+  platelets = platelets,
+  inr = inr,
+  d_dimer = d_dimer,
+  fibrinogen = fibrinogen,
+  data = sepsis
+)
+```
+
+### Python
+The needed inputs for the coagulation score are as is within the example data
+set.
+
+```{python}
+#| label: py_phoenix_coagulation
+py_coag = phx.phoenix_coagulation(
+    platelets = sepsis['platelets'],
+    inr = sepsis['inr'],
+    d_dimer = sepsis['d_dimer'],
+    fibrinogen = sepsis['fibrinogen']
+)
+print(type(py_coag))
+print(py_coag)
+```
+
+### SQLite
+We will create a coagulation table to use when assessing the Phoenix and
+Phoenix-8 scores.
+
+```{sql connection = con}
+#| label: sql_coagulation
+CREATE TABLE IF NOT EXISTS coagulation AS
+
+SELECT
+  pid,
+  CASE WHEN plts + inr + ddm + fib >= 2 THEN 2
+       ELSE plts + inr + ddm + fib END AS phoenix_coagulation_score
+FROM (
+  SELECT
+    pid,
+    CASE WHEN platelets < 100  THEN 1 ELSE 0 END AS plts,
+    CASE WHEN inr > 1.3        THEN 1 ELSE 0 END AS inr,
+    CASE WHEN d_dimer > 2      THEN 1 ELSE 0 END AS ddm,
+    CASE WHEN fibrinogen < 100 THEN 1 ELSE 0 END AS fib
+  FROM sepsis
+)
+```
+
+```{sql connection = con}
+SELECT * FROM coagulation
+```
+
+
+## Neurologic
+
+The Phoenix neurologic dysfunction scoring is based on the PELOD-2
+[@dewi_2019_pelod2] neurologic dysfunction scoring.
+
+### Inputs:
+* `gcs`: an integer vector for the (total) Glasgow Comma Score.  The total score
+  is the sum of the eye, verbal, and motor scores.  Valid gcs values are
+  integers 3, 4, 5, ..., 14, 15.
+
+* `fixed_pupils`: an integer vector of zeros and ones.  1 = bilaterally fixed
+  pupils, 0 otherwise.
+
+### Phoenix Scoring
+
+```{r}
+#| label: neurologic_rubric
+#| echo: false
+#| results: asis
+cat(neurologic_rubric, sep = "\n")
+```
+
+### R
+The example data reports pupil reactivity as either "both-fixed",
+"both-reactive", or "".  We need only create an indicator on the fly to build
+the neurologic score.
+```{r}
+#| label: r_neurologic
+phoenix_neurologic(
+  gcs = gcs_total,
+  fixed_pupils = as.integer(pupil == "both-fixed"),
+  data = sepsis
+)
+```
+
+### Python
+```{python}
+#| label: py_neurologic
+py_neur = phx.phoenix_neurologic(
+    gcs = sepsis["gcs_total"],
+    fixed_pupils = (sepsis["pupil"] == "both-fixed").astype(int)
+)
+print(type(py_neur))
+print(py_neur)
+```
+
+### SQLite
+```{sql connection = con}
+CREATE TABLE IF NOT EXISTS neurologic AS
+
+SELECT
+  pid,
+  CASE WHEN fixed_pupils = 1 THEN 2
+       WHEN gcs = 1          THEN 1
+       ELSE 0 END AS phoenix_neurologic_score
+FROM (
+  SELECT
+    pid,
+    CASE WHEN gcs_total <= 10 THEN 1 ELSE 0 END AS gcs,
+    CASE WHEN pupil = "both-fixed" THEN 1 ELSE 0 END AS fixed_pupils
+  FROM sepsis
+);
+```
+
+```{sql connection = con}
+SELECT * FROM neurologic;
+```
+
+## Endocrine
+
+Endocrine dysfunction is only part of the Phoenix-8 scoring and is based on a
+subset of the Pediatric organ dysfunction information update mandate
+(PODIUM)[@bembea_2022_podium] endocrine thresholds.
+
+### Inputs:
+
+* `glucose`: blood glucose in units of mg/dL
+
+### Phoenix-8 Scoring
+
+```{r}
+#| label: endocrine_rubric
+#| echo: false
+#| results: asis
+cat(endocrine_rubric, sep = "\n")
+```
+### R
+```{r}
+#| label: r_phoenix_endocrine
+phoenix_endocrine(glucose = glucose, data = sepsis)
+```
+
+### Python
+```{python}
+#| label: py_phoenix_endocrine
+py_endo = phx.phoenix_endocrine(sepsis["glucose"])
+print(type(py_endo))
+print(py_endo)
+```
+
+### SQLite
+```{sql connection = con}
+#| label: sql_phoenix_endocrine
+CREATE TABLE IF NOT EXISTS endocrine AS
+SELECT
+  pid,
+  CASE WHEN glucose <  50 THEN 1
+       WHEN glucose > 150 THEN 1
+       ELSE 0 END AS phoenix_endocrine_score
+FROM sepsis
+```
+
+```{sql connection = con}
+SELECT * FROM endocrine
+```
+
+## Immunologic
+
+Immunologic dysfunction is only part of the Phoenix-8 scoring and is based on a
+subset of the Pediatric organ dysfunction information update mandate
+(PODIUM)[@bembea_2022_podium] immunologic thresholds.
+
+### Inputs:
+
+* `anc`: Absolute neutrophil count in units of 1,000 cells per cubic millimeter
+
+* `alc`: absolute lymphocyte count in units of 1,000 cells per cubic millimeter
+
+### Phoenix-8 Scoring
+
+```{r}
+#| label: immunologic_rubric
+#| echo: false
+#| results: asis
+cat(immunologic_rubric, sep = "\n")
+```
+
+```{r}
+#| label: immunologic_score_graphic
+#| echo: false
+#| fig.width: 4
+#| fig.height: 4
+DF <- expand.grid(anc = c(499, 501), alc = c(999, 1001))
+DF$score <- factor(phoenix_immunologic(anc, alc, DF))
+DF$anc <- factor(DF$anc, c(499, 501), c("ANC < 500", "ANC >= 500"))
+DF$alc <- factor(DF$alc, c(999, 1001), c("ALC < 1000", "ALC >= 1000"))
+
+ggplot(DF) +
+  theme_classic() +
+  aes(x = anc, y = alc, fill = score) +
+  geom_tile() +
+  scale_fill_brewer(name = "Phoenix Immunologic Score", palette = "Spectral", direction = -1) +
+  scale_x_discrete(name = "", labels = parse(text = levels(DF$anc))) +
+  scale_y_discrete(name = "", labels = parse(text = levels(DF$alc))) +
+  theme(legend.position = "bottom")
+```
+
+
+### R
+```{r}
+phoenix_immunologic(anc = anc, alc = alc, data = sepsis)
+```
+
+### Python
+```{python}
+py_immu = phx.phoenix_immunologic(sepsis["anc"], sepsis["alc"])
+print(type(py_immu))
+print(py_immu)
+```
+
+### SQLite
+```{sql connection = con}
+CREATE TABLE IF NOT EXISTS immunologic AS
+SELECT
+  pid,
+  CASE WHEN anc <  500 THEN 1
+       WHEN alc < 1000 THEN 1
+       ELSE 0 END AS phoenix_immunologic_score
+FROM sepsis
+```
+
+```{sql connection = con}
+SELECT * FROM immunologic
+```
+
+## Renal
+
+The renal dysfunction score is only part of the Phoenix-8 scoring and comes from
+pSOFA[@matric_2017_psofa].
+
+### Inputs:
+
+* `creatinine` in units of mg/dL
+
+* `age` in months
+
+### Phoenix-8 Scoring
+
+```{r}
+#| label: renal_rubric
+#| echo: false
+#| results: asis
+cat(renal_rubric, sep = "\n")
+```
+
+```{r}
+#| label: renal_score_graphic
+#| echo: false
+#| fig.width: 4
+#| fig.height: 4
+DF <- expand.grid(creatinine = seq(0, 5, by = 0.05), age = seq(0, 216, by = 0.5))
+DF$score <- factor(phoenix_renal(creatinine, age, DF))
+
+ggplot(DF) +
+  theme_classic() +
+  aes(x = age, y = creatinine, fill = score) +
+  geom_tile() +
+  scale_fill_brewer(name = "Phoenix Renal Score", palette = "Spectral", direction = -1) +
+  scale_x_continuous(name = "Age (months)", breaks = seq(0, 18*12, by = 12 * 3)) +
+  ylab("Creatinine (mg/dL)") +
+  theme(legend.position = "bottom")
+```
+
+### R
+```{r}
+phoenix_renal(creatinine = creatinine, age = age, data = sepsis)
+```
+
+### Python
+```{python}
+py_renal = phx.phoenix_renal(sepsis["creatinine"], sepsis["age"])
+print(type(py_renal))
+print(py_renal)
+```
+
+### SQLite
+```{sql connection = con}
+CREATE TABLE IF NOT EXISTS renal AS
+SELECT
+  pid,
+  CASE WHEN (age >=   0 AND age <    1) AND (creatinine >= 0.8) THEN 1
+       WHEN (age >=   1 AND age <   12) AND (creatinine >= 0.3) THEN 1
+       WHEN (age >=  12 AND age <   24) AND (creatinine >= 0.4) THEN 1
+       WHEN (age >=  24 AND age <   60) AND (creatinine >= 0.6) THEN 1
+       WHEN (age >=  60 AND age <  144) AND (creatinine >= 0.7) THEN 1
+       WHEN (age >= 144 AND age <= 216) AND (creatinine >= 1.0) THEN 1
+       ELSE 0 END AS phoenix_renal_score
+FROM sepsis
+```
+```{sql connection = con}
+SELECT * FROM renal
+```
+
+## Hepatic
+
+The hepatic scoring is only part of the Phoenix-8 score and comes from the
+IPSCC[@goldstein_2005_international] criteria.
+
+### Inputs:
+
+* `bilirubin`: total bilirubin in units of mg/dL
+
+* `alt`: alanine aminotransferase in units of mg/dL
+
+### Phoenix-8 scoring
+
+```{r}
+#| label: hepatic_rubric
+#| echo: false
+#| results: asis
+cat(hepatic_rubric, sep = "\n")
+```
+
+```{r}
+#| label: hepatic_score_graphic
+#| echo: false
+#| fig-width: 3
+#| fig-height: 3
+DF <- expand.grid(bil = 0:8, alt = 0:204)
+DF$score <- factor(phoenix_hepatic(bil, alt, DF))
+ggplot(data = DF) +
+  theme_classic() +
+  aes(x = bil, y = alt, fill = score) +
+  geom_tile() +
+  scale_fill_brewer(name = "Phoenix Hepatic Score", palette = "Spectral", direction = -1) +
+  xlab("Total Bilirubin (mg/dL)") +
+  ylab("ALT (IU/dL)") +
+  theme(legend.position = "bottom")
+```
+
+### R
+Calling `phoenix_hepatic` will return an integer vector of scores.
+```{r}
+phoenix_hepatic(bilirubin = bilirubin, alt = alt, data = sepsis)
+```
+
+### Python
+Calling `phoenix_hepatic` will return an integer valued numpy array.
+```{python}
+py_hepatic = phx.phoenix_hepatic(sepsis["bilirubin"], sepsis["alt"])
+print(type(py_hepatic))
+print(py_hepatic)
+```
+
+### SQLite
+```{sql, connection = con}
+CREATE TABLE IF NOT EXISTS hepatic AS
+
+  SELECT
+    pid,
+    CASE WHEN bilirubin >= 4 THEN 1
+         WHEN alt > 102 THEN 1
+         ELSE 0 END AS phoenix_hepatic_score
+  FROM sepsis
+
+```
+
+```{sql, connection = con}
+SELECT * FROM hepatic;
+```
+
+
+
+# Phoenix Criteria
+
+The Phoenix Criteria for sepsis is:
+
+* Suspected (or confirmed) infection: define in development as at least one dose
+  of a systemic antimicrobial medication and at least one test for an infection
+  ordered.  Development of the criteria restricted these actions to the first 24
+  hours of an hospital encounter to minimize potential impacts from hospital
+  acquired infections.
+
+* Phoenix Score: the sum of the respiratory, cardiovascular, coagulation, and
+  neurologic score.
+
+* Sepsis: A pediatric patient with a suspected (or confirmed) infection and a
+  Phoenix Score of at least two points is defined to have sepsis.
+
+* Septic Shock: Sepsis with at least one cardiovascular point.
+
+## R
+The inputs for the R function `phoenix` are the same as the inputs for the four
+individual organ dysfunction scores.  The return form `phoenix` is a
+`data.frame` with a column for each of the four organ dysfunction scores, the
+Phoenix score, and indicators for sepsis and septic shock.
+
+```{r}
+phoenix_scores <-
+  phoenix(
+    # respiratory
+      pf_ratio = pao2 / fio2,
+      sf_ratio = ifelse(spo2 <= 97, spo2 / fio2, NA_real_),
+      imv = vent,
+      other_respiratory_support = as.integer(fio2 > 0.21),
+    # cardiovascular
+      vasoactives = dobutamine + dopamine + epinephrine + milrinone +
+                    norepinephrine + vasopressin,
+      lactate = lactate,
+      age = age,
+      map = dbp + (sbp - dbp)/3,
+    # coagulation
+      platelets = platelets,
+      inr = inr,
+      d_dimer = d_dimer,
+      fibrinogen = fibrinogen,
+    # neurologic
+      gcs = gcs_total,
+      fixed_pupils = as.integer(pupil == "both-fixed"),
+    data = sepsis
+  )
+
+str(phoenix_scores)
+```
+
+## Python
+```{python}
+py_phoenix_scores = phx.phoenix(
+    # resp
+    pf_ratio = sepsis["pao2"] / sepsis["fio2"],
+    sf_ratio = np.where(sepsis["spo2"] <= 97, sepsis["spo2"] / sepsis["fio2"], np.nan),
+    imv      = sepsis["vent"],
+    other_respiratory_support = (sepsis["fio2"] > 0.21).astype(int).to_numpy(),
+    # cardio
+    vasoactives = sepsis["dobutamine"] + sepsis["dopamine"] +
+                  sepsis["epinephrine"] + sepsis["milrinone"] +
+                  sepsis["norepinephrine"] + sepsis["vasopressin"],
+    lactate = sepsis["lactate"],
+    age = sepsis["age"],
+    map = phx.map(sepsis["sbp"], sepsis["dbp"]),
+    # coag
+    platelets = sepsis['platelets'],
+    inr = sepsis['inr'],
+    d_dimer = sepsis['d_dimer'],
+    fibrinogen = sepsis['fibrinogen'],
+    # neuro
+    gcs = sepsis["gcs_total"],
+    fixed_pupils = (sepsis["pupil"] == "both-fixed").astype(int),
+    )
+print(py_phoenix_scores.info())
+print(py_phoenix_scores.head())
+```
+
+## SQLite
+```{sql connection = con}
+CREATE TABLE IF NOT EXISTS phoenix AS
+
+SELECT
+  respiratory.pid AS pid,
+  --phoenix_respiratory_score,
+  --phoenix_cardiovascular_score,
+  --phoenix_coagulation_score,
+  --phoenix_neurologic_score,
+  phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score AS phoenix_sepsis_score,
+
+  IIF(phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score >=2, 1, 0) AS phoenix_sepsis,
+
+  IIF(phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score >=2 AND
+    phoenix_cardiovascular_score > 0, 1, 0) AS phoenix_septic_shock
+
+FROM respiratory
+LEFT JOIN cardiovascular
+ON respiratory.pid = cardiovascular.pid
+LEFT JOIN coagulation
+ON respiratory.pid = coagulation.pid
+LEFT JOIN neurologic
+ON respiratory.pid = neurologic.pid
+```
+
+```{sql connection = con}
+SELECT * FROM phoenix
+```
+
+
+
+# Phoenix-8
+
+During development of the Phoenix criteria it was determined that the
+four-organ-system Phoenix criteria was sufficient for diagnosing sepsis.  An extended
+eight-organ-system score, Phoenix-8, was defined and expected to be primarily
+used for research.
+
+## R
+Calling to `phoenix8` within R will take the same inputs as the 8 organ
+dysfunction scoring functions.  The return is the same as from `phoenix` with
+additional columns for each of the additional four organ systems and a Phoenix-8
+total score.
+```{r}
+phoenix8_scores <-
+  phoenix8(
+    # respiratory
+      pf_ratio = pao2 / fio2,
+      sf_ratio = ifelse(spo2 <= 97, spo2 / fio2, NA_real_),
+      imv = vent,
+      other_respiratory_support = as.integer(fio2 > 0.21),
+    # cardiovascular
+      vasoactives = dobutamine + dopamine + epinephrine + milrinone +
+                    norepinephrine + vasopressin,
+      lactate = lactate,
+      age = age, # Also used in the renal assessment.
+      map = dbp + (sbp - dbp)/3,
+    # coagulation
+      platelets = platelets,
+      inr = inr,
+      d_dimer = d_dimer,
+      fibrinogen = fibrinogen,
+    # neurologic
+      gcs = gcs_total,
+      fixed_pupils = as.integer(pupil == "both-fixed"),
+    # endocrine
+      glucose = glucose,
+    # immunologic
+      anc = anc,
+      alc = alc,
+    # renal
+      creatinine = creatinine,
+      # no need to specify age again
+    # hepatic
+      bilirubin = bilirubin,
+      alt = alt,
+    data = sepsis
+  )
+
+str(phoenix8_scores)
+```
+
+
+## Python
+```{python}
+py_phoenix8_scores = phx.phoenix8(
+  # resp
+    pf_ratio = sepsis["pao2"] / sepsis["fio2"],
+    sf_ratio = np.where(sepsis["spo2"] <= 97, sepsis["spo2"] / sepsis["fio2"], np.nan),
+    imv      = sepsis["vent"],
+    other_respiratory_support = (sepsis["fio2"] > 0.21).astype(int).to_numpy(),
+  # card
+    vasoactives = sepsis["dobutamine"] + sepsis["dopamine"] +
+                  sepsis["epinephrine"] + sepsis["milrinone"] +
+                  sepsis["norepinephrine"] + sepsis["vasopressin"],
+    lactate = sepsis["lactate"],
+    map = phx.map(sepsis["sbp"], sepsis["dbp"]),
+    age = sepsis["age"], # also used in renal assessment
+  # coag
+    platelets = sepsis['platelets'],
+    inr = sepsis['inr'],
+    d_dimer = sepsis['d_dimer'],
+    fibrinogen = sepsis['fibrinogen'],
+  # neuro
+    gcs = sepsis["gcs_total"],
+    fixed_pupils = (sepsis["pupil"] == "both-fixed").astype(int),
+  # endo
+    glucose = sepsis["glucose"],
+  # immuno
+    anc = sepsis["anc"],
+    alc = sepsis["alc"],
+  # renal
+    creatinine = sepsis["creatinine"],
+    # no need to specify age again
+  # hep
+    bilirubin = sepsis["bilirubin"],
+    alt = sepsis["alt"],
+    )
+print(py_phoenix8_scores.info())
+print(py_phoenix8_scores.head())
+```
+
+## SQLite
+```{sql connection = con}
+CREATE TABLE IF NOT EXISTS phoenix8 AS
+
+SELECT
+  respiratory.pid AS pid,
+  --phoenix_respiratory_score,
+  --phoenix_cardiovascular_score,
+  --phoenix_coagulation_score,
+  --phoenix_neurologic_score,
+
+  phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score AS phoenix_sepsis_score,
+
+  IIF(phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score >=2, 1, 0) AS phoenix_sepsis,
+
+  IIF(phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score >=2 AND
+    phoenix_cardiovascular_score > 0, 1, 0) AS phoenix_septic_shock,
+
+  --phoenix_endocrine_score,
+  --phoenix_immunologic_score,
+  --phoenix_renal_score,
+  --phoenix_hepatic_score,
+
+  phoenix_respiratory_score + phoenix_cardiovascular_score +
+    phoenix_coagulation_score + phoenix_neurologic_score  +
+    phoenix_endocrine_score + phoenix_immunologic_score +
+    phoenix_renal_score + phoenix_hepatic_score AS phoenix8_sepsis_score
+
+FROM respiratory
+LEFT JOIN cardiovascular
+ON respiratory.pid = cardiovascular.pid
+LEFT JOIN coagulation
+ON respiratory.pid = coagulation.pid
+LEFT JOIN neurologic
+ON respiratory.pid = neurologic.pid
+LEFT JOIN endocrine
+ON respiratory.pid = endocrine.pid
+LEFT JOIN immunologic
+ON respiratory.pid = immunologic.pid
+LEFT JOIN renal
+ON respiratory.pid = renal.pid
+LEFT JOIN hepatic
+ON respiratory.pid = hepatic.pid
+```
+
+```{sql connection = con}
+SELECT * FROM phoenix8
+```
+
+
+
+# Clinical Vignettes
+
+These are taken from the supplemental material of
+[@sanchezpinto_2024_development](https://doi.org/10.1001/jama.2024.0196)
+
+## Clinical Vignette 1
+
+A previously healthy 3-year-old girl presents to an emergency department in
+Lima, Peru, with a temperature of 39C, tachycardia, and irritability. Blood
+pressure with an oscillometric device is 67/32 mmHg (mean arterial pressure
+of 43 mmHg). She is given fluid resuscitation per local best practice
+guidelines, is started on broad spectrum antibiotics, and blood and urine
+cultures are sent. After an hour, she becomes hypotensive again and she is
+started on a norepinephrine drip. A complete blood count reveals
+leukocytosis, mild anemia, and a platelet count of 95 K/$\mu$L.
+
+_Phoenix Sepsis Score:_
+
+* 0 respiratory points (no hypoxemia or respiratory support)
+* 2 cardiovascular points (1 for low mean arterial pressure for age, 1 for use of a vasoactive medication)
+* 1 coagulation points (for low platelet count)
+* 0 neurologic points (irritability would result in a Glasgow
+Coma Scale of approximately 14)
+* total = 3 points.
+
+_Phoenix Sepsis Criteria:_
+The patient has suspected infection, $\geq 2$ points of the Phoenix Sepsis Score, and
+$\geq 1$ cardiovascular points, so she meets criteria for septic shock.
+
+```{r}
+# R
+phoenix(
+  vasoactives = 1,  # norepinephrine drip
+  map = map(sbp = 67, dbp = 32), # 43.667 mmHg
+  platelets = 95,
+  gcs = 14, # irritability
+  age = 3 * 12 # expected input for age is in months
+  ) |>
+str()
+```
+
+```{python}
+# python
+phx.phoenix(
+  vasoactives = 1,  # norepinephrine drip
+  map = phx.map(sbp = 67, dbp = 32), # 43.667 mmHg
+  platelets = 95,
+  gcs = 14, # irritability
+  age = 3 * 12 # expected input for age is in months
+  )
+```
+
+## Clinical Vignette 2
+
+A 6-year-old boy with a history of prematurity presents with respiratory
+distress to his pediatrician’s office in Tucson, Arizona. He is noted to have
+a temperature of 38.7C, tachypnea, crackles in the left lower quadrant on
+chest auscultation, and an oxygen saturation of 89% on room air. He is
+started on supplemental oxygen and is transported to the local emergency
+department via ambulance. In the emergency department, a chest X-ray shows a
+consolidation in the left lower lobe and hazy bilateral lung opacities, so he
+is started on antibiotics for a suspected bacterial pneumonia. His
+respiratory status worsens, and he is started on non-invasive positive
+pressure ventilation. While awaiting to be admitted, his level of
+consciousness deteriorates rapidly: with nailbed pressure he only opens his
+eyes briefly, moans in pain, and withdraws his hand (Glasgow Coma Scale: 2
+for eye response + 2 for verbal response + 4 for motor response = 8). He is
+intubated using rapid sequence induction and placed on a conventional
+ventilator. During this time, his lowest mean arterial pressure using a
+non-invasive oscillometric device is 52 mmHg and he receives a fluid bolus.
+He is then transferred to the pediatric intensive care unit where he requires
+a high positive end expiratory pressure and an FiO~2~ of 0.45 to achieve an
+oxygen saturation of 92% (S/F ratio: 204). Complete blood count and lactate
+level reveal a platelet count of 120 K/$\mu$L and a serum lactate of 2.9 mmol/L.
+Given his platelet count below the normal reference range, a coagulation
+panel is sent, which reveals an INR of 1.7, a D-Dimer of 4.4 mg/L, and a
+fibrinogen of 120 mg/dL.
+
+_Phoenix Sepsis Score:_
+
+* 2 respiratory points (for an S/F ratio $< 292$ on invasive mechanical ventilator)
+* 0 cardiovascular points (mean arterial pressure $> 48$ mmHg and Lactate level $< 5$ mmol/L)
+* 2 coagulation points (for high INR and D-Dimer)
+* 1 neurologic point (Glasgow Coma Scale $< 10$)
+* total = 5 points.
+
+_Phoenix Sepsis Criteria:_ The patient has a suspected
+infection, $\geq$ 2 points of the Phoenix Sepsis Score, and 0 cardiovascular
+points, so he meets criteria for sepsis.
+
+```{r}
+# R
+phoenix(
+  gcs = 2 + 2 + 4, # eye + verbal + motor
+  map = 52,
+  imv = 1,
+  sf_ratio = 92 / 0.45,
+  platelets = 120,
+  lactate = 2.9,
+  inr = 1.7,
+  d_dimer = 4.4,
+  fibrinogen = 120)
+```
+
+```{python}
+# Python
+phx.phoenix(
+  gcs = 2 + 2 + 4, # eye + verbal + motor
+  map = 52,
+  imv = 1,
+  sf_ratio = 92 / 0.45,
+  platelets = 120,
+  lactate = 2.9,
+  inr = 1.7,
+  d_dimer = 4.4,
+  fibrinogen = 120)
+```
+
+# References {.nonumber}

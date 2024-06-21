@@ -2,6 +2,8 @@
 
 The source code needed to build the manuscript __details after publication__
 
+The files, and history, provided in this repository is limited to what is needed
+for the published version only.
 
 ## How to build the documents
 

@@ -1,0 +1,561 @@
+---
+title: "phoenix: An R package and Python module for calculating the Phoenix Pediatric Sepsis Score and Criteria"
+
+code-fold: false
+echo: true
+number-sections: false
+
+format:
+  html:
+    fig-cap-location: top
+  docx:
+    fig-cap-location: top
+    reference-doc: template.docx
+
+bibliography: references.bib
+csl: jamia.csl
+---
+
+```{r}
+#| label: setup
+#| include: false
+source("setup.R")
+```
+
+
+**Authors**: Peter E. DeWitt^1^, PhD; Seth Russell^1^, MS; Margaret N. Rebull^1^, MA; L. Nelson Sanchez-Pinto^2^, MD, MBI; Tellen D. Bennett^1,3^, MD, MS
+
+[Author affiliations:]{.underline}
+
+^1^ Department of Biomedical Informatics, University of Colorado School of Medicine, University of Colorado Anschutz Medical Campus, Aurora, Colorado, USA
+
+^2^ Departments of Pediatrics (Critical Care) and Preventive Medicine (Health and Biomedical Informatics), Northwestern University Feinberg School of Medicine, and Ann and Robert H. Lurie Children’s Hospital of Chicago, Chicago, Illinois, USA
+
+^3^ Section of Critical Care Medicine, Department of Pediatrics, University of Colorado School of Medicine, University of Colorado Anschutz Medical Campus, Aurora, Colorado, USA
+
+[**Correspondence:**]{.underline}
+
+Peter E. DeWitt, PhD
+
+Department of Biomedical Informatics
+
+University of Colorado School of Medicine
+
+1890 N. Revere Court
+
+Mailstop F600
+
+Aurora, Colorado, 80045
+
+Email: [peter.dewitt@cuanschutz.edu](mailto:peter.dewitt@cuanschutz.edu)
+
+[**Article type:**]{.underline} Application Note
+
+[**Word count:**]{.underline} 1787 / 2000 (excluding tables)
+
+[**Tables:**]{.underline} 2
+
+[**Figures:**]{.underline} 0
+
+[**Supplementary material:**]{.underline} Supplementary Examples
+
+[**Short running title**]{.underline}: R package and Python module for calculating the Phoenix criteria
+
+<!-- allowed 5; recomend https://www.ncbi.nlm.nih.gov/mesh/ -->
+[**Keywords:**]{.underline} Sepsis, Septic shock, pediatrics, computer software, EHR
+
+{{< pagebreak >}}
+
+# Abstract {.unnumbered}
+
+words: 145/150 words
+
+**Objectives**
+
+The publication of the Phoenix criteria for pediatric sepsis and septic shock
+initiates a new era in clinical care and research of pediatric sepsis. Tools to
+consistently and accurately apply the Phoenix criteria to electronic health
+records (EHRs) is one part of building a robust and internally consistent body
+of research across multiple research groups and data sets.
+
+**Materials and Methods**
+
+We developed the `phoenix` R package and Python module to provide researchers
+with intuitive and simple functions to apply the Phoenix criteria to EHR data.
+
+**Results**
+
+The `phoenix` R package and Python module enable researchers to apply the
+Phoenix criteria to EHR datasets and derive the relevant indicators, total
+scores, and sub-scores.
+
+**Conclusions**
+
+The `phoenix` R package and Python model are freely available on CRAN, PyPi, and
+GitHub. These tools enable the consistent and accurate application of the
+Phoenix criteria to EHR datasets.
+
+
+{{< pagebreak >}}
+
+::: {.callout-tip icon="false"}
+## Lay Summary
+<!-- word count: 154 / 200 -->
+
+The Phoenix criteria for pediatric sepsis and septic shock mark the beginning of
+a new era for clinical care and research of pediatric sepsis. The new
+criteria represent a conceptual shift in defining sepsis, moving away from an
+inflammatory based criteria to life-threatening organ dysfunction based
+criteria. As these new diagnostic criteria move to the bedside and research
+areas, the need to consistently and accurately apply the Phoenix criteria to
+electronic health records (EHR) data is necessary to build a robust and
+internally consistent body of research.
+
+We developed the `phoenix` R package and Python module. These two freely
+available tools, along with example SQL queries, provide pediatric sepsis
+researchers the means to apply the Phoenix criteria to EHR data without
+needing to implement the criteria themselves. Use of `phoenix` will reduce
+sources of error in research and provide a common implementation for multiple
+research groups, across multiple data formats, and multiple programming
+paradigms.
+
+:::
+
+{{< pagebreak >}}
+
+# Background and Significance
+
+Approximately 3.3 million pediatric deaths per year are attributable to sepsis
+and septic shock.[@rudd_2020_global]  In January 2024, the Phoenix diagnostic
+criteria for pediatric sepsis were published to supersede the
+criteria[@goldstein_2005_international] defined by the International Pediatrics
+Sepsis Criteria Conference in
+2005.[@schlapbach_2024_international;@sanchezpinto_2024_development]
+Transitioning to the Phoenix criteria is a conceptual change, moving away from
+an inflammatory response-based criteria to a life-threatening organ
+dysfunction-based criteria.  This change parallels the conceptual change for the
+diagnostic criteria of adult sepsis.[@seymour2016assessment;@singer2016third]
+
+The Pediatric Sepsis Task Force developed the Phoenix criteria using a
+data-driven modified Delphi consensus approach. The criteria are based on four
+organ dysfunctions: respiratory, cardiovascular, coagulation, and neurologic.
+Additionally, the task force published an 8-organ system score, Phoenix-8, for
+research
+purposes.[@sanchezpinto_2024_development;@schlapbach_2024_international]
+
+The Phoenix criteria initiate a new era of benchmarking,
+epidemiological surveillance, clinical quality improvement, and research in
+pediatric sepsis.
+
+Sufficient information to implement the Phoenix criteria has been
+published.[@sanchezpinto_2024_development;@schlapbach_2024_international]
+However, the published code required extensive redactions to protect the
+anonymity of both patients and health care systems providing data, resulting in
+code that is not easily reusable.
+
+There is a need for a tool that can apply the Phoenix criteria to any electronic
+health record (EHR) data set consistently such that publications reporting on or
+using the Phoenix criteria can be compared fairly among each other.
+
+To fill this need we have developed and published a R package, Python module,
+and example SQL queries for applying the Phoenix criteria to other data sets.
+
+# Objective
+
+To provide an efficient and consistent way to apply the Phoenix scoring rubric
+to new EHR data sets and for all researchers, we developed the `phoenix` R
+package, Python module, and example SQL queries.
+
+# Materials and Methods
+
+The Phoenix criteria (@tbl-phoenix-rubric) were developed using a dataset that
+included over 3.5 million pediatric encounters from ten hospital systems across
+North America, South America, Asia, and Africa. The criteria are applicable to
+pediatric patients in both high- and low/middle-resourced environments.  The
+development data excluded birth-hospitalizations and patients with gestational
+ages less than 37
+weeks.[@sanchezpinto_2024_development;@schlapbach_2024_international]
+
+::: {#tbl-phoenix-rubric}
+
+ | Organ System                                                          | 0 Points                         | 1 Point                     | 2 Points                 | 3 Points |
+ | :------                                                               | :--                              | :--                         | :--                      | :--      |
+ | **Respiratory** (0-3 points)                                          |                                  |                             |                          |          |
+ |     Respiratory Support                                               |                                  | Any respiratory support     | IMV[^a]                  | IMV      |
+ |     PaO~2~:FiO~2~                                                     | &geq; 400                        | &lt; 400                    | &lt; 200                 | &lt; 100 |
+ |     SpO~2~:FiO~2~[^b]                                                 | &geq; 292                        | &lt; 292                    | &lt; 220                 | &lt; 148 |
+ | **Cardiovascular** (0-6 points; sum of medications, Lactate, and MAP) |                                  |                             |                          |          |
+ |      Systemic Vasoactive Medications[^c]                              | No medications                   | 1 medication                | 2 or more medications    |          |
+ |      Lactate[^d] (mmol/L)                                             | &lt; 5                           | 5 &leq; Lactate[^j] &lt; 11 | &geq; 11                 |          |
+ |      Age[^e] (months) adjusted MAP[^f] (mmHg)                         |                                  |                             |                          |          |
+ |            0 &leq; Age &lt;   1                                       | &geq; 31                         | 17 &leq; MAP &lt; 31        | &lt; 17                  |          |
+ |            1 &leq; Age &lt;  12                                       | &geq; 39                         | 25 &leq; MAP &lt; 39        | &lt; 25                  |          |
+ |           12 &leq; Age &lt;  24                                       | &geq; 44                         | 31 &leq; MAP &lt; 44        | &lt; 31                  |          |
+ |           24 &leq; Age &lt;  60                                       | &geq; 45                         | 32 &leq; MAP &lt; 45        | &lt; 32                  |          |
+ |           60 &leq; Age &lt; 144                                       | &geq; 49                         | 36 &leq; MAP &lt; 49        | &lt; 36                  |          |
+ |          144 &leq; Age &lt; 216                                       | &geq; 52                         | 38 &leq; MAP &lt; 52        | &lt; 38                  |          |
+ | **Coagulation**[^g] (0-2 points; 1 for each lab; max of 2 points)     |                                  |                             |                          |          |
+ |      Platelets (1000/&mu;L)                                           | &geq; 100                        | &lt; 100                    |                          |          |
+ |      INR                                                              | &leq; 1.3                        | &gt; 1.3                    |                          |          |
+ |      D-Dimer (mg/L FEU)                                               | &leq; 2                          | &gt; 2                      |                          |          |
+ |      Fibrinogen (mg/dL)                                               | &geq; 100                        | &lt; 100                    |                          |          |
+ | **Neurologic**[^h] (0-2 points)                                       |                                  |                             |                          |          |
+ |                                                                       | GCS[^i] &geq; 11                 | GCS &leq; 10                | Bilaterally fixed pupils |          |
+ | **Endocrine** (0-1 point)                                             |                                  |                             |                          |          |
+ |      Blood Glucose (mg/dL)                                            | 50 &leq; Blood Glucose &leq; 150 | &lt; 50; or &gt; 150        |                          |          |
+ | **Immunologic** (0-1 point; point from ANC and/or ALC)                |                                  |                             |                          |          |
+ |      ANC (cells/mm^3^)                                                | &geq; 500                        | &lt; 500                    |                          |          |
+ |      ALC (cells/mm^3^)                                                | &geq; 1000                       | &lt; 1000                   |                          |          |
+ | **Renal** (0-1 point)                                                 |                                  |                             |                          |          |
+ |      Age[^e] (months) adjusted Creatinine (mg/dL)                     |                                  |                             |                          |          |
+ |            0 &leq; Age &lt;   1                                       | &lt; 0.8                         | &geq; 0.8                   |                          |          |
+ |            1 &leq; Age &lt;  12                                       | &lt; 0.3                         | &geq; 0.3                   |                          |          |
+ |           12 &leq; Age &lt;  24                                       | &lt; 0.4                         | &geq; 0.4                   |                          |          |
+ |           24 &leq; Age &lt;  60                                       | &lt; 0.6                         | &geq; 0.6                   |                          |          |
+ |           60 &leq; Age &lt; 144                                       | &lt; 0.7                         | &geq; 0.7                   |                          |          |
+ |          144 &leq; Age &lt; 216                                       | &lt; 1.0                         | &geq; 1.0                   |                          |          |
+ | **Hepatic** (0-1 point; point from total bilirubin and/or ALT)        |                                  |                             |                          |          |
+ |      Total Bilirubin (mg/dL)                                          | &lt; 4                           | &geq; 4                     |                          |          |
+ |      ALT (IU/L)                                                       | &leq; 102                        | &gt; 102                    |                          |          |
+
+The Organ Dysfunction Scoring for the Phoenix Criteria. The Phoenix sepsis
+criteria are based on the Phoenix Sepsis Score, which includes respiratory,
+cardiovascular, coagulation, and neurologic dysfunction; Phoenix-8 is based on
+those four organ systems plus endocrine, immunologic, renal, and hepatic
+dysfunction. Sepsis is defined as a Phoenix Sepsis Score &geq; 2. Septic Shock
+is defined as sepsis with at least one cardiovascular point.  Missing data maps
+to scores of zero. The limits reported in this table reflect the implementation
+of the criteria in software, whereas the comparable published tables report the
+criteria from a clinical
+perspective.[@sanchezpinto_2024_development;@schlapbach_2024_international] The
+two representations of the criteria are consistent in practice.
+:::
+
+
+[^a]: Abbreviations:
+  ALC: Absolute lymphocyte count;
+  ALT: alanine aminotransferase;
+  ANC: Absolute neutrophil count;
+  FEU: fibrinogen equivalent units;
+  FiO~2~: fraction of inspired oxygen;
+  GCS: Glasgow Coma Score;
+  IMV: invasive mechanical ventilation;
+  INR: International normalized ratio;
+  MAP: mean arterial pressure;
+  PaO~2~: arterial oxygen pressure;
+  SpO~2~: pulse oximetry oxygen saturation;
+
+[^b]: SpO~2~:FiO~2~ is only valid when SpO~2~ &leq; 97.
+
+[^c]: Vasoactive medications: any systemic dose of dobutamine, dopamine, epinephrine, milrinone, norepinephrine, and/or vasopressin.
+
+[^d]: Lactate can be arterial or venous. Reference range 0.5 - 2.2 mmol/L
+
+[^e]: Age: measured in months and is not adjusted for prematurity.
+
+[^f]: MAP - Use measured mean arterial pressure preferentially (invasive arterial if available, or non-invasive oscillometric), alternatively use the calculation diastolic + (systolic - diastolic) / 3
+
+[^g]: Coagulation variable reference ranges: platelets, 150-450 103/μL; D-dimer, < 0.5 mg/L FEU; fibrinogen, 180-410 mg/dL. International normalized ratio reference range is based on local reference prothrombin time.
+
+[^h]: Neurologic dysfunction scoring was pragmatically validated in both sedated and on sedated patients and those with and without IMV.
+
+[^i]: GCS measures level of consciousness based on verbal, eye, and motor response. Values are integers from 3 to 15 with higher scores indicating better neurologic function.
+
+[^j]: The verbosity of this table is greater than in the tables in the original source publications.[@sanchezpinto_2024_development;@schlapbach_2024_international] The inequalities reported in this table, and the specific values reported in this table, reflect how the criteria is implemented in software whereas the source publications reported tables consistent with clinical practice.  A couple notable differences.  1 cardiovascular point is reached for a lactate value of “5-10.9 mmol/L” and 2 points for lactate &geq; 11 mmol/L.[@sanchezpinto_2024_development;@schlapbach_2024_international] There is an implication of rounding lactate to one decimal place and assessing the criteria. The software simplifies the work by considering lactate values to be a floating point value that could take on any real value and thus the logic of “5 &leq; lactate &lt; 11” for 1 point.  Additionally, for MAP, the criteria listed in this table is consistent with common clinical practice of interpreting MAP as integer values. The criteria listed in this table is used with the assumption that MAP values are floating point values.
+
+The Phoenix criteria define sepsis as a suspected infection (operationalized as
+at least one dose of a systemic anti-microbial medication and at least one
+microbiological test ordered within the first 24 hours of a hospital encounter) with
+a Phoenix score of at least 2 points.  Additionally, septic shock is defined as
+sepsis with at least one point from the cardiovascular dysfunction component of
+the Phoenix Sepsis
+Score.[@sanchezpinto_2024_development;@schlapbach_2024_international]
+
+Missing data values are mapped to scores of
+zero.[@sanchezpinto_2024_development] It was reasonable to assume that for some
+laboratory values and metrics missing data indicate no concern and testing
+was not ordered. Further, the Phoenix criteria was developed to be useful in
+high, medium, and low resource settings where some laboratory values,
+medications, and other values might be uncommon or impossible to obtain.  The
+`phoenix` R package, Python module, and example SQL queries handle missing
+values consistent with the development approach for the Phoenix criteria.
+
+The `phoenix` R package is available from the Comprehensive R
+Archive Network (CRAN) (https://cran.r-project.org/package=phoenix) and GitHub
+(https://github.com/cu-dbmi-peds/phoenix/).  `phoenix`
+was designed to be as light-weight as possible.  There are no dependencies nor
+imports save base R.  The R package was the primary focus for development and
+will be the focus for this manuscript.  A testing suite for version 1.0.0 of
+`phoenix` has 100% code coverage (details on the GitHub page) along with
+automatic CRAN checks for Windows, MacOS, and Ubuntu, for the current version
+of R, the prior version of R, and the development version of R.
+
+The Python module has been made public via PyPi
+(https://pypi.org/project/phoenix-sepsis/) with source code available in the
+same GitHub repository as the R package.  A set of tests are built within the
+GitHub source code to ensure that the results of the Python module are identical
+to the results of the R package.
+
+Lastly, example SQL queries, as understood by SQLite, are also provided in the
+GitHub repository and the **Supplemental Examples**.  As with the Python module
+there is testing code within the repo to ensure the results of the SQLite
+queries are identical to the R package.
+
+Extensive documentation for the R package, Python module, and SQLite queries are
+available on the package website https://cu-dbmi-peds.github.io/phoenix/.
+
+<!--
+
+The Phoenix criteria was developed for pediatric patients during non-birth
+hospitalizations for patients with a gestational ages &gt; 37 weeks up to 216
+months (18 years).
+
+The Phoenix criteria is based on observations within the first 24-hours of a
+hospital encounter.  If there are $n$ observations for a patient over
+the first 24 hours, then Phoenix is the lower bound of the triangle inequality.
+That is, for observations $i = 1, 2, \ldots, n$ in the first 24 hours,
+Phoenix Sepsis Total = $\max_i ( resp_i + card_i + coag_i + neur_i)$.
+not $\max(resp_i) + \max(card_i) + \max(coag_i) + \max(neur_i)$.  An detailed
+example is in Supplement 1.
+
+-->
+
+
+# Results {#sec-results}
+
+An example data set, `sepsis`, is provided as a `data.frame` within the R
+package, as a plain text file in the Python module, and used in the example
+SQLite queries. The data consists of `r nrow(sepsis)` synthetic observations of
+`r ncol(sepsis)` variables needed by the Phoenix and Phoenix-8 criteria. The
+data is lazyloaded in R and is available when the `phoenix` namespace is
+attached to the search path, i.e., when `library(phoenix)` is called.
+
+```{r}
+#| label: r_data_load
+library(phoenix)
+dim(sepsis)
+names(sepsis)
+```
+
+In Python, the example data can be loaded into a pandas DataFrame via
+```{python}
+#| label: py_data_load
+import numpy as np
+import pandas as pd
+import importlib.resources
+import phoenix as phx
+path = importlib.resources.files('phoenix')
+sepsis = pd.read_csv(path.joinpath('data').joinpath('sepsis.csv'))
+print(sepsis.shape)
+```
+
+Extensive detail on the synthetic data is available in the R package
+documentation, the package website, and in the **Supplementary Examples**.
+
+End users of the Python module and R package will have generally the same
+experience.  Both use the same naming conventions and provide the same ten
+vectorized functions for applying the Phoenix criteria (@tbl-functions).
+
+::: {#tbl-functions}
+
+ | Phoenix Criteria           | R, Python Function       | R Return       | Python Return    |
+ | :----------------          | :-----------------       | :------        | :-----------     |
+ | Respiratory dysfunction    | `phoenix_respiratory`    | Integer vector | Numpy array      |
+ | Cardiovascular dysfunction | `phoenix_cardiovascular` | Integer vector | Numpy array      |
+ | Coagulation dysfunction    | `phoenix_coagulation`    | Integer vector | Numpy array      |
+ | Neurologic dysfunction     | `phoenix_neurologic`     | Integer vector | Numpy array      |
+ | Endocrine dysfunction      | `phoenix_endocrine`      | Integer vector | Numpy array      |
+ | Immunologic dysfunction    | `phoenix_immunologic`    | Integer vector | Numpy array      |
+ | Renal dysfunction          | `phoenix_renal`          | Integer vector | Numpy array      |
+ | Hepatic dysfunction        | `phoenix_hepatic`        | Integer vector | Numpy array      |
+ | Phoenix Criteria           | `phoenix`                | `data.frame`   | Pandas DataFrame |
+ | Phoenix-8 Criteria         | `phoenix8`               | `data.frame`   | Pandas DataFrame |
+
+R and Python function names and returns for each of the Phoenix organ
+dysfunction scores and total scoring.  The Phoenix criteria is the sum of the
+respiratory, cardiovascular, coagulation, and neurologic scores.  Phoenix
+sepsis is defined as a total score of two or more points (along with suspected
+infection).  Septic shock is sepsis with at least one cardiovascular point.
+Phoenix-8 is an extended scoring system and is the sum of all eight organ
+systems.
+
+:::
+
+
+The return of `phoenix()` is a data.frame (R) Pandas DataFrame (Python) with
+`r ncol(phoenix())` columns; the respiratory dysfunction score, cardiovascular
+dysfunction score, coagulation dysfunction score, neurologic dysfunction score,
+total score, and indicator columns for sepsis (total score &geq; 2), and septic
+shock (sepsis with &geq; 1 cardiovascular points).  `phoenix8()` returns the
+same as `phoenix()` with additional columns for the endocrine, immunologic,
+renal, and hepatic dysfunction scores, and the Phoenix-8 total score.  All the
+columns are integer valued.
+
+A simple example[@sanchezpinto_2024_development]: a three-year-old presenting
+with a fever, tachycardia, and irritability is given broad spectrum antibiotics
+and started on a norepinephrine drip due to hypotension (blood pressure 67/32).
+A complete blood count (CBC) shows a platelet count of 95 K/&mu;L. Applying the
+Phoenix criteria to this patient results in a respiratory score of 0,
+cardiovascular score of 2; coagulation score of 1; neurologic score of 0, and a
+total score of 3; sepsis=yes because the score is &geq; 2; septic shock=yes
+because the cardiovascular score is also &geq; 1. Scoring in R would be done
+using:
+
+```{r}
+#| echo: true
+#| results: markup
+library(phoenix)
+p <- phoenix(
+  vasoactives = 1,
+  map         = map(sbp = 67, dbp = 32), # MAP = 2/3 * DBP + 1/3 * SBP,
+  platelets   = 95,
+  gcs         = 14,
+  age         = 36)
+str(p)
+```
+
+Scoring in Python:
+```{python}
+#| echo: true
+#| results: markup
+import phoenix as phx
+df = phx.phoenix(
+  vasoactives = 1,
+  map         = (2/3) * 32 + (1/3) * 67,
+  platelets   = 95,
+  gcs         = 14,
+  age         = 36)
+print(df.T)
+```
+
+In the above example only the known data need be inputted.  Missing values are
+mapped to scores of zero.  That is, Phoenix is based on the explicitly defined
+inputs and any missing inputs are implicitly mapping to scores of zero.  This is
+consistent with the Phoenix development process.[@sanchezpinto_2024_development]
+
+To apply the Phoenix rubric to a full data set in R:
+```{r}
+phoenix_scores <-
+  phoenix(
+    # respiratory
+      pf_ratio = pao2 / fio2,
+      sf_ratio = ifelse(spo2 <= 97, spo2 / fio2, NA_real_),
+      imv = vent,
+      other_respiratory_support = as.integer(fio2 > 0.21),
+    # cardiovascular
+      vasoactives = dobutamine + dopamine + epinephrine +
+                    milrinone + norepinephrine + vasopressin,
+      lactate = lactate,
+      age = age,
+      map = dbp + (sbp - dbp)/3,
+    # coagulation
+      platelets = platelets,
+      inr = inr,
+      d_dimer = d_dimer,
+      fibrinogen = fibrinogen,
+    # neurologic
+      gcs = gcs_total,
+      fixed_pupils = as.integer(pupil == "both-fixed"),
+    data = sepsis
+  )
+str(phoenix_scores)
+```
+
+Details on the expected units for inputs as denoted in @tbl-phoenix-rubric are
+also provided in the documentation for the R package
+```{r}
+#| eval: false
+?phoenix8
+```
+and Python module
+```{python}
+#| eval: false
+help(phx.phoenix8)
+```
+
+Additional details and examples for each of the eight organ dysfunction scoring
+functions, `phoenix()`, and `phoenix8()` methods are in the **Supplemental
+Examples**.  The supplement includes examples in R, Python, and SQLite.
+
+# Discussion
+
+The transition to the Phoenix criteria marks a major change in the conceptual
+definition of pediatric sepsis.[@jabornisky2024transitioning] Applicable across
+differentially resourced settings, the Phoenix criteria should help improve
+clinical care and research across the globe.
+
+Additionally, the eponymic R package and Python modules provide researchers a
+simple to use tool for consistent and faithful application of the Phoenix
+criteria to any applicable data set.
+
+Researchers are encouraged to carefully review the provided documentation for
+the package. Some assumptions used by the package are easy to overlook. The
+example for using `phoenix()` on a `data.frame` in R has expressions for the
+PaO~2~:FiO~2~ ratio, SpO~2~:Fi~2~ ratio, respiratory support, vasoactives
+medications, mean arterial pressure (MAP), and fixed pupils.  This example is
+provided to be explicit about data assumptions such as the SpO~2~:FiO~2~ ratio
+only being valid for SpO~2~ values not exceeding 97.
+
+In practice, we suggest processing the data first such that only a variable name
+need be passed as an argument.  This could be particularly useful in the case of
+MAP where a hierarchy of values could be used, i.e., invasive MAP readings are
+preferable to calculated MAP based on invasive SBP and DBP, and invasive
+measurements are preferable to non-invasive blood pressure cuff measurements.
+
+<!--
+"When you are doing your research and you call sepsis or you call septic shock
+[the patient] must have [the Phoenix] criteria."[@jamapodcast] -- Roberto Jabornisky
+-->
+
+
+## Conclusions
+
+The `phoenix` R package and Python module, meets the objectives of the FAIR
+Principles for Research Software (FAIR4RS Principles).[@barker_2022_introducing]
+The package and module are intuitive tools for consistently and accurately
+applying the Phoenix pediatric sepsis criteria to clinical data sets.
+
+{{< pagebreak >}}
+
+[**Funding Statement:**]{.underline} This work was supported by Eunice Kennedy Shriver National Institute of Child Health and Human Development grant R01HD105939 to TDB and LNSP.
+
+[**Competing Interests Statement:**]{.underline} None.
+
+[**Data Availability Statement:**]{.underline} The `phoenix` R package is freely
+available on CRAN at https://cran.r-project.org/package=phoenix.  The `phoenix`
+Python module is freely available from PyPi:
+https://pypi.org/project/phoenix-sepsis/.
+Extensive documentation and example SQLite queries are available online at
+https://cu-dbmi-peds.github.io/phoenix/index.html.
+This manuscript was written using Quarto version
+`r system("quarto --version", intern = TRUE)`
+(https://quarto.org/) and `r R.version.string`. All R code, materials,
+and dependencies can be found at
+https://github.com/cu-dbmi-peds/phoenix_application_note/.
+
+[**Contributorship Statement:**]{.underline} PED designed and developed the
+`phoenix` R package, Python module, example SQL code, and drafted the
+manuscript. SR provided critical code review and testing.  SR, MR, LNSP, and TDB
+all contributed to the conception, design, and interpretation and provided
+important feedback. All authors critically reviewed the manuscript for important
+intellectual content and approved of the final version of the manuscript.
+
+<!--
+[**Acknowledgments:**]{.underline}
+-->
+
+{{< pagebreak >}}
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+<!--
+{{< pagebreak >}}
+
+
+{{< pagebreak >}}
+
+# Figures {.unnumbered}
+-->
