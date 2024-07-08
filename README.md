@@ -1,6 +1,13 @@
 # phoenix: An R package and Python module for calculating the Phoenix Pediatric Sepsis Score and Criteria
 
-The source code needed to build the manuscript __details after publication__
+The source code needed to build the manuscript.
+
+Cite the article:
+
+Peter E DeWitt, Seth Russell, Margaret N Rebull, L Nelson Sanchez-Pinto, Tellen
+D Bennett, phoenix: an R package and Python module for calculating the Phoenix
+pediatric sepsis score and criteria, JAMIA Open, Volume 7, Issue 3, October
+2024, ooae066, https://doi.org/10.1093/jamiaopen/ooae066
 
 The files, and history, provided in this repository is limited to what is needed
 for the published version only.
